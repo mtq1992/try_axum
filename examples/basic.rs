@@ -1,17 +1,18 @@
 use std::vec;
 
 use axum::{
+    async_trait,
+    extract::{FromRequest, RequestParts, TypedHeader},
+    headers::{authorization::Bearer, Authorization},
+    http::StatusCode,
     response::{Html, IntoResponse, Response},
-    routing::get,routing::post,
-    Router, 
-    Json, http::StatusCode, extract::{FromRequest, RequestParts, TypedHeader}, async_trait, headers::{Authorization, authorization::Bearer},
+    routing::get,
+    routing::post,
+    Json, Router,
 };
 
 use jwt::Validation;
-use serde::{
-    Serialize, 
-    Deserialize, 
-};
+use serde::{Deserialize, Serialize};
 
 use jsonwebtoken as jwt;
 
@@ -24,7 +25,6 @@ pub struct Todo {
     pub completed: bool,
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateTodo {
     pub tittle: String,
@@ -33,18 +33,18 @@ pub struct CreateTodo {
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     id: usize,
-    name: String
+    name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct LoginRequest {
     email: String,
-    password: String
+    password: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct LoginResponse {
-    token: String
+    token: String,
 }
 
 #[tokio::main]
@@ -60,7 +60,7 @@ async fn main() {
         .serve(app.into_make_service())
         .await
         .unwrap();
-} 
+}
 
 async fn index_hander() -> Html<&'static str> {
     Html("hello world!")
@@ -76,8 +76,8 @@ async fn todos_handler() -> Json<Vec<Todo>> {
         Todo {
             id: 2,
             tittle: "todo 1".to_string(),
-            completed: false
-        }
+            completed: false,
+        },
     ])
 }
 
@@ -87,17 +87,16 @@ async fn create_todo_handler(claims: Claims, Json(_todo): Json<CreateTodo>) -> S
 }
 
 async fn login_handler(Json(login): Json<LoginRequest>) -> Json<LoginResponse> {
-    // skip login user verify  
-    println!("{}, {}",login.email,login.password);
+    // skip login user verify
+    println!("{}, {}", login.email, login.password);
     let claims = Claims {
         id: 1,
-        name: "John doe".to_string(), 
+        name: "John doe".to_string(),
     };
     let key = jwt::EncodingKey::from_secret(SECRET);
     let token = jwt::encode(&jwt::Header::default(), &claims, &key).unwrap();
-    Json(LoginResponse{ token })
+    Json(LoginResponse { token })
 }
-
 
 #[async_trait]
 impl<B> FromRequest<B> for Claims
@@ -108,25 +107,23 @@ where
 
     async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
         // ...
-        let TypedHeader(Authorization(bearer)) = 
-        TypedHeader::<Authorization<Bearer>>::from_request(req)
-        .await
-        .map_err(|_| HttpError::Auth)?;
-        
-        let key = jwt::EncodingKey::from_secret(SECRET);
+        let TypedHeader(Authorization(bearer)) =
+            TypedHeader::<Authorization<Bearer>>::from_request(req)
+                .await
+                .map_err(|_| HttpError::Auth)?;
+
+        let key = jwt::DecodingKey::from_secret(SECRET);
         let token = jwt::decode(bearer.token(), &key, &Validation::default())
             .map_err(|_| HttpError::Auth)?;
-        
-            Ok(token.claims)
 
+        Ok(token.claims)
     }
 }
-
 
 #[derive(Debug)]
 enum HttpError {
     Auth,
-    Internal
+    Internal,
 }
 
 impl IntoResponse for HttpError {
